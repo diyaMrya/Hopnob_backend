@@ -214,7 +214,7 @@ def get_cloth_segment(image_path, device, net):
     cv2.imwrite('image_segment.png', output_image)
 
 
-async def main(device = device, net = net, fashion_client = fashion_client):
+async def main(device, net, fashion_client):
 
     ##Connect to server
     nc = await nats.connect(servers=["nats://216.48.179.152:4222"])
@@ -222,7 +222,11 @@ async def main(device = device, net = net, fashion_client = fashion_client):
     MAXHEIGHT = 720
 
     async def message_handler(msg):
-        url = msg.data.decode()
+        print(msg.data)
+        data = eval(msg.data.decode())
+        phone_number = data['mobileNumber']
+        url = data['url']
+        #url = msg.data.decode()
         urllib.request.urlretrieve(url,"test_whatsapp.png")
         image = Image.open("test_whatsapp.png")
         s = image.size
@@ -233,30 +237,32 @@ async def main(device = device, net = net, fashion_client = fashion_client):
         tags_seg = get_tags_all_seg(img = image, device = device, net = net, fashion_client=fashion_client, path = "test_whatsapp.png")
         tags_noseg = get_tags_all_noseg(img = image, device = device, net = net, fashion_client=fashion_client, path = "test_whatsapp.png")
         tags_noseg['url'] = url
+        tags_noseg['phone_number'] = phone_number
+        print(tags_noseg)
         tags_noseg = json.dumps(tags_noseg)
         to_bytes = tags_noseg.encode()
-        await nc.publish("test_whatsapp", to_bytes)
+        await nc.publish("get_features", to_bytes)
 
         
     
     sub = await nc.subscribe("test_whatsapp", cb=message_handler)
     print("check")
 
-    await sub.unsubscribe()
+    #await sub.unsubscribe()
 
-    await nc.close()
+    #await nc.close()
 
 if __name__ == '__main__':
-    ##Load Model
-    device = "cuda:0"
-    checkpoint_path = 'cloth_segm_u2net_latest.pth'
-    net = U2NET(in_ch=3, out_ch=4)
-    net = load_checkpoint_mgpu(net, checkpoint_path)
-    net = net.to(device)
-    net = net.eval()
+  ##Load Model
+  device = "cuda:0"
+  checkpoint_path = 'cloth_segm_u2net_latest.pth'
+  net = U2NET(in_ch=3, out_ch=4)
+  net = load_checkpoint_mgpu(net, checkpoint_path)
+  net = net.to(device)
+  net = net.eval()
 
-    fashion_client = FashionTaggingClient(token="2f7c51901dda0937e4c991938fcbbba6f011f275")
+  fashion_client = FashionTaggingClient(token="2f7c51901dda0937e4c991938fcbbba6f011f275")
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main(device = device, net = net, fashion_client = fashion_client))
-    loop.run_forever()
+  loop = asyncio.get_event_loop()
+  loop.run_until_complete(main(device = device, net = net, fashion_client = fashion_client))
+  loop.run_forever()
